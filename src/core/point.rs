@@ -42,6 +42,38 @@ mod tests {
     use super::*;
 
     #[test]
+    fn transform_point_up() {
+        let point = Point::new(1, 1);
+        let point = point.transform(Direction::Up, 1);
+        assert_eq!(point.x, 1);
+        assert_eq!(point.y, 0);
+    }
+
+    #[test]
+    fn transform_point_right() {
+        let point = Point::new(1, 1);
+        let point = point.transform(Direction::Right, 1);
+        assert_eq!(point.x, 2);
+        assert_eq!(point.y, 1);
+    }
+
+    #[test]
+    fn transform_point_down() {
+        let point = Point::new(1, 1);
+        let point = point.transform(Direction::Down, 1);
+        assert_eq!(point.x, 1);
+        assert_eq!(point.y, 2);
+    }
+
+    #[test]
+    fn transform_point_left() {
+        let point = Point::new(1, 1);
+        let point = point.transform(Direction::Left, 1);
+        assert_eq!(point.x, 0);
+        assert_eq!(point.y, 1);
+    }
+
+    #[test]
     fn should_transform_positive_value() {
         let result = Point::transform_value(1, 2);
         assert_eq!(result, 3);
