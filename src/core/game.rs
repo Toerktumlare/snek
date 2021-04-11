@@ -1,6 +1,6 @@
 use crossterm::{
-    cursor::Hide,
-    style::{Color, SetForegroundColor},
+    cursor::{Hide, MoveTo},
+    style::{Color, Print, SetForegroundColor},
     terminal::{enable_raw_mode, size, Clear, ClearType, SetSize},
     ExecutableCommand,
 };
@@ -42,14 +42,7 @@ impl Game {
         while !done {
             let interval = self.calculate_interval();
             let now = Instant::now();
-            while now.elapsed() < interval {
-                println!("Tick");
-                println!(
-                    "interval: {}, elapsed: {}",
-                    interval.as_millis(),
-                    now.elapsed().as_millis()
-                );
-            }
+            while now.elapsed() < interval {}
         }
     }
 
@@ -61,7 +54,7 @@ impl Game {
     }
 
     fn init(&mut self) {
-        enable_raw_mode().unwrap();
+        //enable_raw_mode().unwrap();
         self.stdout
             .execute(SetSize(self.width + 3, self.height + 3))
             .unwrap()
@@ -79,6 +72,30 @@ impl Game {
         self.stdout
             .execute(SetForegroundColor(Color::DarkGrey))
             .unwrap();
+
+        for y in 0..self.height + 2 {
+            self.stdout
+                .execute(MoveTo(0, y))
+                .unwrap()
+                .execute(Print("#"))
+                .unwrap()
+                .execute(MoveTo(self.width + 1, y))
+                .unwrap()
+                .execute(Print("#"))
+                .unwrap();
+        }
+
+        for x in 0..self.width + 2 {
+            self.stdout
+                .execute(MoveTo(x, 0))
+                .unwrap()
+                .execute(Print("#"))
+                .unwrap()
+                .execute(MoveTo(x, self.height + 1))
+                .unwrap()
+                .execute(Print("#"))
+                .unwrap();
+        }
     }
 }
 
