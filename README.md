@@ -6,7 +6,7 @@ A Snek implementation in Rusterino
 - [x] draw playing area
 - [x] draw snake
 - [x] make snake move
-- [x] handle inouts
+- [x] handle inputs
 - [x] exit game
 - [ ] add an `updatable` trait
 - [ ] use alternative terminal screen
