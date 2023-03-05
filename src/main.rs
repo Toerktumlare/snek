@@ -1,9 +1,10 @@
 pub mod core;
 
 use crate::core::game::Game;
-use std::io::stdout;
 
 fn main() {
-    println!("Starting game...");
-    Game::new(stdout(), 50, 25).run();
+    let screen = core::gui::screen::Screen::stdout()
+        .unwrap()
+        .alternate_screen(true);
+    Game::new(screen, 50, 25).run();
 }

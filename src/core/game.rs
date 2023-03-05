@@ -1,238 +1,136 @@
-use crossterm::{
-    cursor::{Hide, MoveTo, Show},
-    event::{poll, read, Event, KeyCode},
-    style::{Color, Print, SetForegroundColor},
-    terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType, SetSize},
-    ExecutableCommand, QueueableCommand,
-};
-use std::{
-    convert::TryInto,
-    io::{Stdout, Write},
-    sync::mpsc::{self, Receiver, Sender},
-    thread,
-    time::Duration,
+use std::{thread, time::Duration};
+
+use super::{
+    ecs::{
+        entityidaccessor::EntityIdAccessor, entitymanager::EntityManager, system::System, Component,
+    },
+    gui::{buffer::Style, screen::Screen, window::Window, Direction, Pos, Shape, Size},
 };
 
-use super::{direction::Direction, snake::Snake};
-
-#[derive(Debug)]
 pub struct Game {
-    stdout: Stdout,
-    width: i16,
-    height: i16,
-    snake: Snake,
-    tx: Sender<KeyCode>,
-    rx: Receiver<KeyCode>,
+    screen: Screen,
+    window: Window,
     is_running: bool,
 }
 
+struct Namable {
+    name: &'static str,
+}
+
+struct Position {
+    x: i16,
+    y: i16,
+}
+
+struct Velocity {
+    x: i16,
+    y: i16,
+}
+
+impl Component for Namable {}
+impl Component for Position {}
+impl Component for Velocity {}
+
+struct MoveSystem;
+
+impl System for MoveSystem {
+    fn update(&mut self, em: &mut EntityManager, eia: &mut EntityIdAccessor) {
+        let entity_ids = eia.borrow_ids_for_pair::<Velocity, Position>(em).unwrap();
+        for id in entity_ids.iter() {
+            let (velocity, mut position) = em
+                .borrow_component_manager_pair_mut::<Velocity, Position>(*id)
+                .unwrap();
+            position.x += velocity.x;
+            position.y += velocity.y;
+        }
+    }
+}
+
 impl Game {
-    pub fn new(stdout: Stdout, width: i16, height: i16) -> Self {
-        let snake = Snake::new(3, 3);
-        let (tx, rx): (Sender<KeyCode>, Receiver<KeyCode>) = mpsc::channel();
+    pub fn new(screen: Screen, _arena_width: i16, _arena_height: i16) -> Self {
+        let mut em = EntityManager::new();
+        em.register_component::<Namable>();
+        em.register_component::<Position>();
+        em.register_component::<Velocity>();
+
+        let entity_id = em.create_entity();
+        em.add_component_to_entity(entity_id, Namable { name: "snek" });
+        em.add_component_to_entity(entity_id, Position { x: 5, y: 5 });
+        em.add_component_to_entity(entity_id, Velocity { x: 0, y: 1 });
+
+        let entity_id = em.create_entity();
+        em.add_component_to_entity(entity_id, Namable { name: "apple" });
+        em.add_component_to_entity(entity_id, Position { x: 5, y: 5 });
+
+        let window = Window::new(Pos::new(10, 1), Size::new(30, 30));
+
         Self {
-            stdout,
-            width,
-            height,
-            snake,
-            tx,
-            rx,
+            screen,
+            window,
             is_running: false,
         }
     }
 
     pub fn run(&mut self) {
         self.init();
-        self.draw();
-        let duration = Duration::from_millis(1000 / 15);
-
-        let tx = self.tx.clone();
-
-        let handle = thread::Builder::new()
-            .name("key_events".to_string())
-            .spawn(move || {
-                Game::key_events(tx).unwrap();
-            })
-            .unwrap();
 
         self.is_running = true;
 
+        let duration = Duration::from_millis(1000 / 15);
         while self.is_running {
             thread::sleep(duration);
-            let mut snake = &mut self.snake;
-            snake.x += snake.x_speed;
-            snake.y += snake.y_speed;
-            if snake.x > self.height {
-                snake.x = 1;
-            }
-            if snake.x == 0 {
-                snake.x = self.height;
-            }
-            if snake.y > self.width {
-                snake.y = 1;
-            }
-            if snake.y == 0 {
-                snake.y = self.width;
-            }
             self.update();
             self.draw();
+            self.screen.render().unwrap();
         }
-
-        handle.join().unwrap();
     }
 
-    // fn calculate_interval(&self) -> Duration {
-    //     let speed = MAX_SPEED - self.speed;
-    //     Duration::from_millis(
-    //         (MIN_INTERVAL + (((MAX_INTERVAL - MIN_INTERVAL) / MAX_SPEED) * speed)) as u64,
-    //     )
-    // }
-
     fn init(&mut self) {
-        self.stdout
-            .queue(SetSize((self.width + 3) as u16, (self.height + 3) as u16))
-            .unwrap()
-            .queue(Clear(ClearType::All))
-            .unwrap()
-            .queue(Hide)
-            .unwrap();
-        enable_raw_mode().unwrap();
+        // self.screen.enable_raw_mode().unwrap();
+        // hide cursor
+        // enable raw mode
     }
 
     fn draw(&mut self) {
-        self.clear();
-        self.draw_borders();
-        self.draw_snake();
-        self.draw_diagnostics();
-        self.stdout.flush().unwrap();
+        let mut shape = Shape::new(&mut self.window);
+        //Top line
+        shape.line(
+            &mut self.screen,
+            Pos::new(0, 0),
+            12,
+            Direction::East,
+            '▩',
+            Style::white(),
+        );
+        // left line
+        shape.line(
+            &mut self.screen,
+            Pos::new(0, 0),
+            12,
+            Direction::South,
+            '▩',
+            Style::white(),
+        );
+        // right line
+        shape.line(
+            &mut self.screen,
+            Pos::new(11, 0),
+            12,
+            Direction::South,
+            '▩',
+            Style::white(),
+        );
+        //bottom line
+        shape.line(
+            &mut self.screen,
+            Pos::new(0, 12),
+            12,
+            Direction::East,
+            '▩',
+            Style::white(),
+        );
+        // draw screen
     }
 
-    fn clear(&mut self) {
-        self.stdout.execute(Clear(ClearType::All)).unwrap();
-    }
-
-    fn draw_borders(&mut self) {
-        self.stdout
-            .execute(SetForegroundColor(Color::DarkGrey))
-            .unwrap();
-
-        for y in 0..self.height + 2 {
-            self.stdout
-                .queue(MoveTo(0, y.try_into().unwrap()))
-                .unwrap()
-                .queue(Print("#"))
-                .unwrap()
-                .queue(MoveTo((self.width + 1) as u16, y.try_into().unwrap()))
-                .unwrap()
-                .queue(Print("#"))
-                .unwrap();
-        }
-
-        for x in 0..self.width + 2 {
-            self.stdout
-                .queue(MoveTo(x.try_into().unwrap(), 0))
-                .unwrap()
-                .queue(Print("#"))
-                .unwrap()
-                .queue(MoveTo(x.try_into().unwrap(), (self.height + 1) as u16))
-                .unwrap()
-                .queue(Print("#"))
-                .unwrap();
-        }
-    }
-
-    fn draw_snake(&mut self) {
-        self.stdout
-            .queue(MoveTo(self.snake.y as u16, self.snake.x as u16))
-            .unwrap()
-            .queue(Print("*"))
-            .unwrap();
-    }
-
-    fn draw_diagnostics(&mut self) {
-        let snake_diagnostics = format!("Snake: {}", self.snake);
-        self.stdout
-            .queue(MoveTo(0, (self.height + 3) as u16))
-            .unwrap()
-            .queue(Print("==== Diagnostics ===="))
-            .unwrap()
-            .queue(MoveTo(0, (self.height + 4) as u16))
-            .unwrap()
-            .queue(Print(snake_diagnostics))
-            .unwrap();
-        self.print_direction();
-    }
-
-    fn print_direction(&mut self) {
-        let mut direction = Direction::Right;
-        if self.snake.y_speed == -1 && self.snake.x_speed == 0 {
-            direction = Direction::Left;
-        } else if self.snake.y_speed == 1 && self.snake.x_speed == 0 {
-            direction = Direction::Right;
-        } else if self.snake.y_speed == 0 && self.snake.x_speed == -1 {
-            direction = Direction::Up;
-        } else if self.snake.y_speed == 0 && self.snake.x_speed == 1 {
-            direction = Direction::Down;
-        }
-        let direction = format!("Direction: {:?}", direction);
-        self.stdout
-            .queue(MoveTo(0, (self.height + 5) as u16))
-            .unwrap()
-            .queue(Print(direction))
-            .unwrap();
-    }
-
-    fn key_events(sender: Sender<KeyCode>) -> crossterm::Result<()> {
-        let mut is_running = true;
-        while is_running {
-            if poll(Duration::from_millis(100))? {
-                if let Event::Key(event) = read()? {
-                    if event.code == KeyCode::Esc {
-                        is_running = false;
-                        sender.send(event.code).unwrap();
-                    } else {
-                        sender.send(event.code).unwrap();
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-
-    fn update(&mut self) {
-        if let Ok(key_code) = self.rx.try_recv() {
-            match key_code {
-                KeyCode::Left => {
-                    self.snake.y_speed = -1;
-                    self.snake.x_speed = 0;
-                }
-                KeyCode::Right => {
-                    self.snake.y_speed = 1;
-                    self.snake.x_speed = 0;
-                }
-                KeyCode::Up => {
-                    self.snake.y_speed = 0;
-                    self.snake.x_speed = -1;
-                }
-                KeyCode::Down => {
-                    self.snake.y_speed = 0;
-                    self.snake.x_speed = 1;
-                }
-                KeyCode::Esc => self.is_running = false,
-                _ => (),
-            }
-        };
-    }
-}
-
-impl Drop for Game {
-    fn drop(&mut self) {
-        disable_raw_mode().expect("Unable to disable raw mode");
-        self.stdout
-            .queue(Clear(ClearType::All))
-            .unwrap()
-            .queue(Show)
-            .unwrap();
-        self.stdout.flush().unwrap();
-    }
+    fn update(&mut self) {}
 }

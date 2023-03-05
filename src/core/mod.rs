@@ -1,3 +1,3 @@
-pub mod direction;
+pub mod ecs;
 pub mod game;
-pub mod snake;
+pub mod gui;
