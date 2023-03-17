@@ -2,7 +2,8 @@ use std::{thread, time::Duration};
 
 use super::{
     ecs::{
-        entityidaccessor::EntityIdAccessor, entitymanager::EntityManager, system::System, Component,
+        entityidaccessor::EntityIdAccessor, entitymanager::EntityManager, simulation::Simulation,
+        system::System, Component,
     },
     gui::{buffer::Style, screen::Screen, window::Window, Direction, Pos, Shape, Size},
 };
@@ -10,6 +11,7 @@ use super::{
 pub struct Game {
     screen: Screen,
     window: Window,
+    simulation: Simulation,
     is_running: bool,
 }
 
@@ -27,9 +29,14 @@ struct Velocity {
     y: i16,
 }
 
+struct Render {
+    sprite: char,
+}
+
 impl Component for Namable {}
 impl Component for Position {}
 impl Component for Velocity {}
+impl Component for Render {}
 
 struct MoveSystem;
 
@@ -48,25 +55,28 @@ impl System for MoveSystem {
 
 impl Game {
     pub fn new(screen: Screen, _arena_width: i16, _arena_height: i16) -> Self {
-        let mut em = EntityManager::new();
-        em.register_component::<Namable>();
-        em.register_component::<Position>();
-        em.register_component::<Velocity>();
+        let mut simulation = Simulation::new();
+        simulation.register_component::<Namable>();
+        simulation.register_component::<Position>();
+        simulation.register_component::<Velocity>();
+        simulation.register_component::<Render>();
 
-        let entity_id = em.create_entity();
-        em.add_component_to_entity(entity_id, Namable { name: "snek" });
-        em.add_component_to_entity(entity_id, Position { x: 5, y: 5 });
-        em.add_component_to_entity(entity_id, Velocity { x: 0, y: 1 });
+        let entity_id = simulation.create_entity();
+        simulation.add_component_to_entity(entity_id, Namable { name: "snek" });
+        simulation.add_component_to_entity(entity_id, Position { x: 5, y: 5 });
+        simulation.add_component_to_entity(entity_id, Velocity { x: 0, y: 1 });
 
-        let entity_id = em.create_entity();
-        em.add_component_to_entity(entity_id, Namable { name: "apple" });
-        em.add_component_to_entity(entity_id, Position { x: 5, y: 5 });
+        let entity_id = simulation.create_entity();
+        simulation.add_component_to_entity(entity_id, Namable { name: "apple" });
+        simulation.add_component_to_entity(entity_id, Position { x: 5, y: 5 });
+        simulation.add_component_to_entity(entity_id, Render { sprite: '🍎' });
 
         let window = Window::new(Pos::new(10, 1), Size::new(30, 30));
 
         Self {
             screen,
             window,
+            simulation,
             is_running: false,
         }
     }
@@ -79,8 +89,26 @@ impl Game {
         let duration = Duration::from_millis(1000 / 15);
         while self.is_running {
             thread::sleep(duration);
-            self.update();
+            // self.simulation.update();
             self.draw();
+
+            let em = &self.simulation.entity_manager;
+            let eim = &mut self.simulation.entity_id_accessor;
+
+            let entity_ids = eim.borrow_ids_for_pair::<Render, Position>(em).unwrap();
+
+            for id in entity_ids.iter() {
+                let (render, position) = em
+                    .borrow_component_manager_pair_mut::<Render, Position>(*id)
+                    .unwrap();
+
+                self.window.put(
+                    &mut self.screen,
+                    render.sprite,
+                    Pos::new(position.x as u16, position.y as u16),
+                    Style::white(),
+                )
+            }
             self.screen.render().unwrap();
         }
     }
@@ -131,6 +159,4 @@ impl Game {
         );
         // draw screen
     }
-
-    fn update(&mut self) {}
 }

@@ -1,7 +1,9 @@
 use core::any::Any;
 use std::collections::HashMap;
+pub mod entities;
 pub mod entityidaccessor;
 pub mod entitymanager;
+pub mod simulation;
 pub mod system;
 
 pub trait Component {}

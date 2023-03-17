@@ -12,7 +12,7 @@ pub struct EntityIdAccessor {
 }
 
 impl EntityIdAccessor {
-    fn new() -> Self {
+    pub fn new() -> Self {
         EntityIdAccessor {
             cache_map: HashMap::new(),
             updated_frame_map: HashMap::new(),

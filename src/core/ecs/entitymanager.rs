@@ -1,38 +1,6 @@
 use std::{any::TypeId, collections::HashMap, mem::transmute};
 
-use super::{Component, ComponentManager, ComponentManagerTrait};
-
-#[derive(Debug)]
-struct Entity {
-    alice: bool,
-}
-
-impl Entity {
-    fn new() -> Entity {
-        todo!()
-    }
-}
-
-#[derive(Default)]
-pub struct Entities {
-    entities: Vec<Entity>,
-}
-
-impl Entities {
-    pub fn new() -> Self {
-        Self { entities: vec![] }
-    }
-
-    fn push(&self, _entity: Entity) -> usize {
-        todo!()
-    }
-
-    pub fn create(&mut self) -> usize {
-        let entity = Entity::new();
-        self.entities.push(entity);
-        self.entities.len() - 1
-    }
-}
+use super::{entities::Entities, Component, ComponentManager, ComponentManagerTrait};
 
 #[derive(Default)]
 pub struct EntityManager {
@@ -56,6 +24,10 @@ impl EntityManager {
         self.entities.create()
     }
 
+    pub fn remove_entity(&mut self, entity_id: usize) {
+        self.entities.remove(entity_id);
+    }
+
     pub fn get_last_updated_frame<T: 'static + Component>(&self) -> u64 {
         let type_id = TypeId::of::<T>();
         *self.last_updated_map.get(&type_id).unwrap()
@@ -71,7 +43,7 @@ impl EntityManager {
         self
     }
 
-    pub(crate) fn register_component<T: 'static + Component>(&mut self) -> &mut Self {
+    pub(crate) fn register<T: 'static + Component>(&mut self) -> &mut Self {
         // @TODO: Check if component manager for T already exists
         let type_id = TypeId::of::<T>();
         self.manager_map
@@ -130,6 +102,10 @@ impl EntityManager {
         let t2 = manager2.borrow_components_mut(entity_id).unwrap();
 
         Some((t1, t2))
+    }
+
+    pub(crate) fn step_frame(&mut self) {
+        self.frame += 1;
     }
 }
 

@@ -25,14 +25,6 @@ pub struct Screen {
 }
 
 impl Screen {
-    pub fn stdout() -> Result<Self> {
-        let stdout = std::io::stdout();
-        let size: Size = term_size().unwrap().into();
-        Self::new(stdout, size)
-    }
-}
-
-impl Screen {
     pub fn new(mut output: Stdout, size: impl Into<Size>) -> Result<Self> {
         let size: Size = size.into();
         output.queue(cursor::MoveTo(0, 0)).unwrap();
@@ -44,6 +36,12 @@ impl Screen {
             size,
             alt_screen: false,
         })
+    }
+
+    pub fn stdout() -> Result<Self> {
+        let stdout = std::io::stdout();
+        let size: Size = term_size().unwrap().into();
+        Self::new(stdout, size)
     }
 
     pub fn size(&self) -> Size {
