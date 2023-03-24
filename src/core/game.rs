@@ -54,7 +54,7 @@ impl System for MoveSystem {
 }
 
 impl Game {
-    pub fn new(screen: Screen, _arena_width: i16, _arena_height: i16) -> Self {
+    pub fn new(screen: Screen, arena_height: i16, arena_width: i16) -> Self {
         let mut simulation = Simulation::new();
         simulation.register_component::<Namable>();
         simulation.register_component::<Position>();
@@ -63,15 +63,36 @@ impl Game {
 
         let entity_id = simulation.create_entity();
         simulation.add_component_to_entity(entity_id, Namable { name: "snek" });
-        simulation.add_component_to_entity(entity_id, Position { x: 5, y: 5 });
-        simulation.add_component_to_entity(entity_id, Velocity { x: 0, y: 1 });
+        simulation.add_component_to_entity(entity_id, Position { x: 7, y: 7 });
+        simulation.add_component_to_entity(entity_id, Velocity { x: 1, y: 0 });
+        simulation.add_component_to_entity(entity_id, Render { sprite: '🟢' });
 
         let entity_id = simulation.create_entity();
         simulation.add_component_to_entity(entity_id, Namable { name: "apple" });
         simulation.add_component_to_entity(entity_id, Position { x: 5, y: 5 });
         simulation.add_component_to_entity(entity_id, Render { sprite: '🍎' });
 
-        let window = Window::new(Pos::new(10, 1), Size::new(30, 30));
+        for x in 0..arena_height {
+            for y in 0..arena_width {
+                if x == 0 {
+                    let entity_id = simulation.create_entity();
+                    simulation.add_component_to_entity(entity_id, Position { x, y });
+                    simulation.add_component_to_entity(entity_id, Render { sprite: '▩' });
+                } else if x == arena_height - 1 {
+                    let entity_id = simulation.create_entity();
+                    simulation.add_component_to_entity(entity_id, Position { x, y });
+                    simulation.add_component_to_entity(entity_id, Render { sprite: '▩' });
+                } else if y == 0 || y == arena_width - 1 {
+                    let entity_id = simulation.create_entity();
+                    simulation.add_component_to_entity(entity_id, Position { x, y });
+                    simulation.add_component_to_entity(entity_id, Render { sprite: '▩' });
+                }
+            }
+        }
+
+        simulation.add_system(MoveSystem {});
+
+        let window = Window::new(Pos::new(10, 1), Size::new(140, 40));
 
         Self {
             screen,
@@ -89,14 +110,16 @@ impl Game {
         let duration = Duration::from_millis(1000 / 15);
         while self.is_running {
             thread::sleep(duration);
-            // self.simulation.update();
-            self.draw();
+            self.simulation.update();
+            // self.draw();
 
             let em = &self.simulation.entity_manager;
             let eim = &mut self.simulation.entity_id_accessor;
 
             let entity_ids = eim.borrow_ids_for_pair::<Render, Position>(em).unwrap();
 
+            self.screen
+                .erase_region(Pos::new(10, 1), Size::new(140, 40));
             for id in entity_ids.iter() {
                 let (render, position) = em
                     .borrow_component_manager_pair_mut::<Render, Position>(*id)
