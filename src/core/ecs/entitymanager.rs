@@ -107,6 +107,39 @@ impl EntityManager {
     pub(crate) fn step_frame(&mut self) {
         self.frame += 1;
     }
+
+    pub(crate) fn borrow_component<T: Component + 'static>(&self, entity_id: usize) -> Option<&T> {
+        match self.has_component_manager::<T>() {
+            true => self
+                .borrow_component_manager::<T>()
+                .borrow_component(entity_id),
+            false => None,
+        }
+    }
+
+    fn has_component_manager<T: 'static>(&self) -> bool {
+        let type_id = TypeId::of::<T>();
+        self.manager_map.contains_key(&type_id)
+    }
+
+    pub(crate) fn borrow_components<T: Component + 'static>(&self) -> Option<&Vec<T>> {
+        match self.has_component_manager::<T>() {
+            true => self.borrow_component_manager::<T>().borrow_components(),
+            false => None,
+        }
+    }
+
+    pub(crate) fn borrow_component_mut<T: Component + 'static>(
+        &mut self,
+        entity_id: usize,
+    ) -> Option<&mut T> {
+        match self.has_component_manager::<T>() {
+            true => self
+                .borrow_component_manager_mut::<T>()
+                .borrow_component_mut(entity_id),
+            false => None,
+        }
+    }
 }
 
 #[allow(clippy::mut_from_ref, clippy::borrowed_box)]

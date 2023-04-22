@@ -58,4 +58,18 @@ impl<T: Component> ComponentManager<T> {
         let index = self.entity_ids_map.get(&entity_id).unwrap();
         Some(&mut self.components[*index])
     }
+
+    fn borrow_component(&self, entity_id: usize) -> Option<&T> {
+        let index = self.entity_ids_map.get(&entity_id).unwrap();
+        Some(&self.components[*index])
+    }
+
+    fn borrow_component_mut(&mut self, entity_id: usize) -> Option<&mut T> {
+        let index = self.entity_ids_map.get(&entity_id).unwrap();
+        Some(&mut self.components[*index])
+    }
+
+    fn borrow_components(&self) -> Option<&Vec<T>> {
+        Some(&self.components)
+    }
 }

@@ -33,12 +33,68 @@ struct Render {
     sprite: char,
 }
 
+struct Collidable {
+    collided: bool,
+}
+
+struct Arena {
+    width: i16,
+    height: i16,
+}
+
 impl Component for Namable {}
 impl Component for Position {}
 impl Component for Velocity {}
 impl Component for Render {}
+impl Component for Collidable {}
+impl Component for Arena {}
 
 struct MoveSystem;
+struct CollisionCheckSystem;
+struct WrappingBoundrySystem;
+
+impl System for WrappingBoundrySystem {
+    fn update(&mut self, em: &mut EntityManager, eia: &mut EntityIdAccessor) {
+        let (arena_width, arena_height) = {
+            let arena = &em.borrow_components::<Arena>().unwrap()[0];
+            (arena.width, arena.height)
+        };
+        let snek_id = eia.borrow_ids_for_pair::<Velocity, Position>(em).unwrap()[0];
+        let mut snek = em.borrow_component_mut::<Position>(snek_id).unwrap();
+        if snek.x == arena_height {
+            snek.x = 0;
+        }
+
+        if snek.x < 0 {
+            snek.x = arena_height;
+        }
+
+        if snek.y == arena_width {
+            snek.y = 0;
+        }
+
+        if snek.y < 0 {
+            snek.y = arena_height;
+        }
+    }
+}
+
+impl System for CollisionCheckSystem {
+    fn update(&mut self, em: &mut EntityManager, eia: &mut EntityIdAccessor) {}
+}
+
+impl CollisionCheckSystem {
+    fn check_collision(
+        &self,
+        manager: &EntityManager,
+        entity_id1: usize,
+        entity_id2: usize,
+    ) -> bool {
+        let position1 = manager.borrow_component::<Position>(entity_id1).unwrap();
+        let position2 = manager.borrow_component::<Position>(entity_id2).unwrap();
+        position1.x > position2.x && position1.y > position2.y
+    }
+}
 
 impl System for MoveSystem {
     fn update(&mut self, em: &mut EntityManager, eia: &mut EntityIdAccessor) {
@@ -60,37 +116,45 @@ impl Game {
         simulation.register_component::<Position>();
         simulation.register_component::<Velocity>();
         simulation.register_component::<Render>();
+        simulation.register_component::<Collidable>();
+        simulation.register_component::<Arena>();
 
         let entity_id = simulation.create_entity();
         simulation.add_component_to_entity(entity_id, Namable { name: "snek" });
         simulation.add_component_to_entity(entity_id, Position { x: 7, y: 7 });
         simulation.add_component_to_entity(entity_id, Velocity { x: 1, y: 0 });
         simulation.add_component_to_entity(entity_id, Render { sprite: '🟢' });
+        simulation.add_component_to_entity(entity_id, Collidable { collided: false });
 
         let entity_id = simulation.create_entity();
         simulation.add_component_to_entity(entity_id, Namable { name: "apple" });
         simulation.add_component_to_entity(entity_id, Position { x: 5, y: 5 });
         simulation.add_component_to_entity(entity_id, Render { sprite: '🍎' });
+        simulation.add_component_to_entity(entity_id, Collidable { collided: false });
+
+        let entity_id = simulation.create_entity();
+        simulation.add_component_to_entity(
+            entity_id,
+            Arena {
+                width: arena_width,
+                height: arena_height,
+            },
+        );
 
         for x in 0..arena_height {
             for y in 0..arena_width {
-                if x == 0 {
+                if x == 0 || x == arena_height - 1 || (y == 0 || y == arena_width - 1) {
                     let entity_id = simulation.create_entity();
                     simulation.add_component_to_entity(entity_id, Position { x, y });
                     simulation.add_component_to_entity(entity_id, Render { sprite: '▩' });
-                } else if x == arena_height - 1 {
-                    let entity_id = simulation.create_entity();
-                    simulation.add_component_to_entity(entity_id, Position { x, y });
-                    simulation.add_component_to_entity(entity_id, Render { sprite: '▩' });
-                } else if y == 0 || y == arena_width - 1 {
-                    let entity_id = simulation.create_entity();
-                    simulation.add_component_to_entity(entity_id, Position { x, y });
-                    simulation.add_component_to_entity(entity_id, Render { sprite: '▩' });
+                    simulation.add_component_to_entity(entity_id, Collidable { collided: false });
                 }
             }
         }
 
         simulation.add_system(MoveSystem {});
+        simulation.add_system(CollisionCheckSystem {});
+        simulation.add_system(WrappingBoundrySystem {});
 
         let window = Window::new(Pos::new(10, 1), Size::new(140, 40));
 
