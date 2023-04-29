@@ -19,3 +19,6 @@ A Snek implementation in Rusterino
 - [ ] add debug flag
 - [ ] add some instructions on screen
 - [ ] bugfix: not allowed to do full 180 degree turns
+- [ ] bugfix: can travel in walls
+- [ ] bugfix: debug info shows wrong events
+- [ ] bugfix: off by one collisions bottom

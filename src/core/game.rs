@@ -5,7 +5,7 @@ use super::{
         entityidaccessor::EntityIdAccessor, entitymanager::EntityManager, simulation::Simulation,
         system::System, Component,
     },
-    gui::{buffer::Style, screen::Screen, window::Window, Direction, Pos, Shape, Size},
+    gui::{buffer::Style, event_handler::Action, screen::Screen, window::Window, Pos, Size},
 };
 
 pub struct Game {
@@ -15,8 +15,12 @@ pub struct Game {
     is_running: bool,
 }
 
-struct Namable {
-    name: &'static str,
+pub struct Snek {
+    pub is_alive: bool,
+}
+
+pub struct Apple {
+    pub is_alive: bool,
 }
 
 struct Position {
@@ -42,19 +46,22 @@ struct Arena {
     height: i16,
 }
 
-impl Component for Namable {}
 impl Component for Position {}
 impl Component for Velocity {}
 impl Component for Render {}
 impl Component for Collidable {}
 impl Component for Arena {}
+impl Component for Snek {}
+impl Component for Apple {}
 
 struct MoveSystem;
 struct CollisionCheckSystem;
 struct WrappingBoundrySystem;
+struct VelocitySystem;
+struct DeathSystem;
 
 impl System for WrappingBoundrySystem {
-    fn update(&mut self, em: &mut EntityManager, eia: &mut EntityIdAccessor) {
+    fn update(&mut self, em: &mut EntityManager, eia: &mut EntityIdAccessor, _action: &Action) {
         let (arena_width, arena_height) = {
             let arena = &em.borrow_components::<Arena>().unwrap()[0];
             (arena.width, arena.height)
@@ -80,7 +87,17 @@ impl System for WrappingBoundrySystem {
 }
 
 impl System for CollisionCheckSystem {
-    fn update(&mut self, em: &mut EntityManager, eia: &mut EntityIdAccessor) {}
+    fn update(&mut self, em: &mut EntityManager, eia: &mut EntityIdAccessor, _action: &Action) {
+        let user_id = eia.borrow_ids_for_pair::<Position, Snek>(em).unwrap()[0];
+        let apple_ids = eia.borrow_ids_for_pair::<Position, Apple>(em).unwrap();
+        for id in apple_ids.iter() {
+            if CollisionCheckSystem::check_collision(self, em, user_id, *id) {
+                // if collision has occured
+                let c = em.borrow_component_mut::<Collidable>(*id).unwrap();
+                c.collided = true
+            }
+        }
+    }
 }
 
 impl CollisionCheckSystem {
@@ -97,7 +114,7 @@ impl CollisionCheckSystem {
 }
 
 impl System for MoveSystem {
-    fn update(&mut self, em: &mut EntityManager, eia: &mut EntityIdAccessor) {
+    fn update(&mut self, em: &mut EntityManager, eia: &mut EntityIdAccessor, _action: &Action) {
         let entity_ids = eia.borrow_ids_for_pair::<Velocity, Position>(em).unwrap();
         for id in entity_ids.iter() {
             let (velocity, mut position) = em
@@ -109,25 +126,58 @@ impl System for MoveSystem {
     }
 }
 
+impl System for VelocitySystem {
+    fn update(&mut self, em: &mut EntityManager, eia: &mut EntityIdAccessor, action: &Action) {
+        let id = eia.borrow_ids_for_pair::<Velocity, Position>(em).unwrap()[0];
+        let (velocity, _) = em
+            .borrow_component_manager_pair_mut::<Velocity, Position>(id)
+            .unwrap();
+        match action {
+            Action::Up => {
+                velocity.x = 0;
+                velocity.y = -1;
+            }
+            Action::Down => {
+                velocity.x = 0;
+                velocity.y = 1;
+            }
+            Action::Left => {
+                velocity.x = -1;
+                velocity.y = 0;
+            }
+            Action::Right => {
+                velocity.x = 1;
+                velocity.y = 0;
+            }
+            _ => (),
+        }
+    }
+}
+
+impl System for DeathSystem {
+    fn update(&mut self, em: &mut EntityManager, eia: &mut EntityIdAccessor, action: &Action) {}
+}
+
 impl Game {
     pub fn new(screen: Screen, arena_height: i16, arena_width: i16) -> Self {
         let mut simulation = Simulation::new();
-        simulation.register_component::<Namable>();
         simulation.register_component::<Position>();
         simulation.register_component::<Velocity>();
         simulation.register_component::<Render>();
         simulation.register_component::<Collidable>();
         simulation.register_component::<Arena>();
+        simulation.register_component::<Snek>();
+        simulation.register_component::<Apple>();
 
         let entity_id = simulation.create_entity();
-        simulation.add_component_to_entity(entity_id, Namable { name: "snek" });
+        simulation.add_component_to_entity(entity_id, Snek { is_alive: true });
         simulation.add_component_to_entity(entity_id, Position { x: 7, y: 7 });
         simulation.add_component_to_entity(entity_id, Velocity { x: 1, y: 0 });
         simulation.add_component_to_entity(entity_id, Render { sprite: '🟢' });
         simulation.add_component_to_entity(entity_id, Collidable { collided: false });
 
         let entity_id = simulation.create_entity();
-        simulation.add_component_to_entity(entity_id, Namable { name: "apple" });
+        simulation.add_component_to_entity(entity_id, Apple { is_alive: true });
         simulation.add_component_to_entity(entity_id, Position { x: 5, y: 5 });
         simulation.add_component_to_entity(entity_id, Render { sprite: '🍎' });
         simulation.add_component_to_entity(entity_id, Collidable { collided: false });
@@ -155,8 +205,11 @@ impl Game {
         simulation.add_system(MoveSystem {});
         simulation.add_system(CollisionCheckSystem {});
         simulation.add_system(WrappingBoundrySystem {});
+        simulation.add_system(VelocitySystem {});
 
         let window = Window::new(Pos::new(10, 1), Size::new(140, 40));
+
+        screen.enable_raw_mode().unwrap();
 
         Self {
             screen,
@@ -174,8 +227,7 @@ impl Game {
         let duration = Duration::from_millis(1000 / 15);
         while self.is_running {
             thread::sleep(duration);
-            self.simulation.update();
-            // self.draw();
+            let action = self.simulation.update();
 
             let em = &self.simulation.entity_manager;
             let eim = &mut self.simulation.entity_id_accessor;
@@ -194,56 +246,26 @@ impl Game {
                     render.sprite,
                     Pos::new(position.x as u16, position.y as u16),
                     Style::white(),
+                );
+                self.window.print(
+                    &mut self.screen,
+                    format!("Action: {:?}", action),
+                    &mut Pos::new(0, 23),
+                    Style::white(),
                 )
             }
             self.screen.render().unwrap();
+            if action == Action::Exit {
+                break;
+            }
         }
+
+        self.screen.disable_raw_mode().unwrap();
     }
 
     fn init(&mut self) {
         // self.screen.enable_raw_mode().unwrap();
         // hide cursor
         // enable raw mode
-    }
-
-    fn draw(&mut self) {
-        let mut shape = Shape::new(&mut self.window);
-        //Top line
-        shape.line(
-            &mut self.screen,
-            Pos::new(0, 0),
-            12,
-            Direction::East,
-            '▩',
-            Style::white(),
-        );
-        // left line
-        shape.line(
-            &mut self.screen,
-            Pos::new(0, 0),
-            12,
-            Direction::South,
-            '▩',
-            Style::white(),
-        );
-        // right line
-        shape.line(
-            &mut self.screen,
-            Pos::new(11, 0),
-            12,
-            Direction::South,
-            '▩',
-            Style::white(),
-        );
-        //bottom line
-        shape.line(
-            &mut self.screen,
-            Pos::new(0, 12),
-            12,
-            Direction::East,
-            '▩',
-            Style::white(),
-        );
-        // draw screen
     }
 }

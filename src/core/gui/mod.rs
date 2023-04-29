@@ -8,7 +8,7 @@ use self::{buffer::Style, screen::Screen, window::Window};
 
 pub mod buffer;
 pub mod error;
-// pub mod event_handler;
+pub mod event_handler;
 pub mod screen;
 pub mod window;
 

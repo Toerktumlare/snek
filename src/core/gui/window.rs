@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use unicode_width::UnicodeWidthChar;
 
 use super::{
@@ -18,6 +20,13 @@ impl Window {
             absolute_pos: pos,
             size,
             cursor: Pos::zero(),
+        }
+    }
+
+    pub fn print(&mut self, screen: &mut Screen, s: impl AsRef<str>, pos: &mut Pos, style: Style) {
+        for c in s.as_ref().chars() {
+            pos.x += 1;
+            self.put(screen, c, *pos, style)
         }
     }
 

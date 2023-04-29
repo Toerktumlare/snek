@@ -1,3 +1,5 @@
+use crate::core::gui::event_handler::{Action, EventHandler};
+
 use super::{
     entityidaccessor::EntityIdAccessor, entitymanager::EntityManager, system::System, Component,
 };
@@ -6,6 +8,7 @@ use super::{
 pub struct Simulation {
     pub entity_manager: EntityManager,
     pub entity_id_accessor: EntityIdAccessor,
+    pub event_handler: EventHandler,
     systems: Vec<Box<dyn System>>,
 }
 
@@ -14,6 +17,7 @@ impl Simulation {
         Self {
             entity_manager: EntityManager::new(),
             entity_id_accessor: EntityIdAccessor::new(),
+            event_handler: EventHandler::new(),
             systems: vec![],
         }
     }
@@ -46,10 +50,22 @@ impl Simulation {
         self
     }
 
-    pub fn update(&mut self) {
+    pub fn update(&mut self) -> Action {
+        let event = if let Ok(event) = self.event_handler.receiver.try_recv() {
+            event
+        } else {
+            Action::None
+        };
+
         for system in self.systems.iter_mut() {
-            system.update(&mut self.entity_manager, &mut self.entity_id_accessor);
+            system.update(
+                &mut self.entity_manager,
+                &mut self.entity_id_accessor,
+                &event,
+            );
             self.entity_manager.step_frame();
         }
+
+        event
     }
 }

@@ -13,9 +13,14 @@ pub struct EventHandler {
     worker: EventWorker,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum Action {
-    Clear,
+    Up,
+    Down,
+    Left,
+    Right,
     Exit,
+    None,
 }
 
 impl EventHandler {
@@ -23,6 +28,12 @@ impl EventHandler {
         let (sender, receiver) = unbounded();
         let worker = EventWorker::run("event_worker", sender).unwrap();
         Self { receiver, worker }
+    }
+}
+
+impl Default for EventHandler {
+    fn default() -> Self {
+        EventHandler::new()
     }
 }
 
@@ -47,7 +58,7 @@ impl EventWorker {
         let (tx, rx) = unbounded();
         let name = name.into();
         let handle = thread::Builder::new()
-            .name(name)
+            .name(name.clone())
             .spawn(move || loop {
                 if poll(Duration::from_millis(100)).unwrap() {
                     match read().unwrap() {
@@ -56,9 +67,21 @@ impl EventWorker {
                             modifiers: KeyModifiers::NONE,
                         }) => sender.send(Action::Exit).unwrap(),
                         Event::Key(KeyEvent {
-                            code: KeyCode::Char('c'),
+                            code: KeyCode::Char('w'),
                             modifiers: KeyModifiers::NONE,
-                        }) => sender.send(Action::Clear).unwrap_or(()),
+                        }) => sender.send(Action::Up).unwrap_or(()),
+                        Event::Key(KeyEvent {
+                            code: KeyCode::Char('a'),
+                            modifiers: KeyModifiers::NONE,
+                        }) => sender.send(Action::Left).unwrap_or(()),
+                        Event::Key(KeyEvent {
+                            code: KeyCode::Char('s'),
+                            modifiers: KeyModifiers::NONE,
+                        }) => sender.send(Action::Down).unwrap_or(()),
+                        Event::Key(KeyEvent {
+                            code: KeyCode::Char('d'),
+                            modifiers: KeyModifiers::NONE,
+                        }) => sender.send(Action::Right).unwrap_or(()),
                         _ => (),
                     };
                 }
