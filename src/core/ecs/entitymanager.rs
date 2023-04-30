@@ -4,8 +4,8 @@ use super::{entities::Entities, Component, ComponentManager, ComponentManagerTra
 
 #[derive(Default)]
 pub struct EntityManager {
-    entities: Entities,
-    manager_map: HashMap<TypeId, Box<dyn ComponentManagerTrait>>,
+    pub entities: Entities,
+    pub manager_map: HashMap<TypeId, Box<dyn ComponentManagerTrait>>,
     frame: u64,
     last_updated_map: HashMap<TypeId, u64>,
 }
@@ -25,6 +25,15 @@ impl EntityManager {
     }
 
     pub fn remove_entity(&mut self, entity_id: usize) {
+        let frame = self.get_frame();
+        for (_, manager) in self.manager_map.iter_mut() {
+            if manager.has(entity_id) {
+                manager.remove(entity_id);
+                // @TODO: Write comment for +1
+                self.last_updated_map
+                    .insert(manager.get_type_id(), frame + 1);
+            }
+        }
         self.entities.remove(entity_id);
     }
 

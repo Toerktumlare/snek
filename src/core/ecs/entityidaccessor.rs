@@ -19,6 +19,31 @@ impl EntityIdAccessor {
         }
     }
 
+    pub fn borrow_ids<T1: 'static + Component>(
+        &mut self,
+        manager: &EntityManager,
+    ) -> Option<&Vec<usize>> {
+        let type_id = TypeId::of::<T1>();
+        let needs_updating = if let Entry::Vacant(e) = self.cache_map.entry(type_id) {
+            e.insert(Vec::new());
+            true
+        } else {
+            let update_frame = *self.updated_frame_map.get(&type_id).unwrap();
+            manager.get_update_frame::<T1>() != update_frame
+        };
+
+        if needs_updating {
+            let src = &manager.borrow_entity_ids::<T1>().unwrap();
+            let dst = self.cache_map.get_mut(&type_id).unwrap();
+            dst.clear();
+            for id in src.iter() {
+                dst.push(*id);
+            }
+            self.updated_frame_map.insert(type_id, manager.get_frame());
+        }
+        self.cache_map.get(&type_id)
+    }
+
     pub fn borrow_ids_for_pair<T1: 'static + Component, T2: 'static + Component>(
         &mut self,
         manager: &EntityManager,

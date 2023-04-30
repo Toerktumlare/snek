@@ -92,9 +92,10 @@ impl System for CollisionCheckSystem {
         let apple_ids = eia.borrow_ids_for_pair::<Position, Apple>(em).unwrap();
         for id in apple_ids.iter() {
             if CollisionCheckSystem::check_collision(self, em, user_id, *id) {
-                // if collision has occured
-                let c = em.borrow_component_mut::<Collidable>(*id).unwrap();
-                c.collided = true
+                let (c, _) = em
+                    .borrow_component_manager_pair_mut::<Collidable, Apple>(*id)
+                    .unwrap();
+                c.collided = true;
             }
         }
     }
@@ -109,7 +110,7 @@ impl CollisionCheckSystem {
     ) -> bool {
         let position1 = manager.borrow_component::<Position>(entity_id1).unwrap();
         let position2 = manager.borrow_component::<Position>(entity_id2).unwrap();
-        position1.x > position2.x && position1.y > position2.y
+        position1.x <= position2.x && position1.y <= position2.y
     }
 }
 
@@ -155,7 +156,17 @@ impl System for VelocitySystem {
 }
 
 impl System for DeathSystem {
-    fn update(&mut self, em: &mut EntityManager, eia: &mut EntityIdAccessor, action: &Action) {}
+    fn update(&mut self, em: &mut EntityManager, eia: &mut EntityIdAccessor, action: &Action) {
+        let ids = eia.borrow_ids::<Collidable>(em).unwrap();
+        for id in ids.iter() {
+            let component = em.borrow_component::<Collidable>(*id).unwrap();
+            if component.collided {
+                let apple = em.borrow_component_mut::<Apple>(*id).unwrap();
+                apple.is_alive = false;
+                em.remove_entity(*id);
+            }
+        }
+    }
 }
 
 impl Game {
@@ -202,10 +213,11 @@ impl Game {
             }
         }
 
+        simulation.add_system(VelocitySystem {});
         simulation.add_system(MoveSystem {});
         simulation.add_system(CollisionCheckSystem {});
         simulation.add_system(WrappingBoundrySystem {});
-        simulation.add_system(VelocitySystem {});
+        simulation.add_system(DeathSystem {});
 
         let window = Window::new(Pos::new(10, 1), Size::new(140, 40));
 
@@ -220,8 +232,6 @@ impl Game {
     }
 
     pub fn run(&mut self) {
-        self.init();
-
         self.is_running = true;
 
         let duration = Duration::from_millis(1000 / 15);
@@ -237,9 +247,8 @@ impl Game {
             self.screen
                 .erase_region(Pos::new(10, 1), Size::new(140, 40));
             for id in entity_ids.iter() {
-                let (render, position) = em
-                    .borrow_component_manager_pair_mut::<Render, Position>(*id)
-                    .unwrap();
+                let render = em.borrow_component::<Render>(*id).unwrap();
+                let position = em.borrow_component::<Position>(*id).unwrap();
 
                 self.window.put(
                     &mut self.screen,
@@ -247,25 +256,18 @@ impl Game {
                     Pos::new(position.x as u16, position.y as u16),
                     Style::white(),
                 );
-                self.window.print(
-                    &mut self.screen,
-                    format!("Action: {:?}", action),
-                    &mut Pos::new(0, 23),
-                    Style::white(),
-                )
             }
+            self.window.print(
+                &mut self.screen,
+                format!("em: {:?}", em.entities.entities.len()),
+                &mut Pos::new(0, 23),
+                Style::white(),
+            );
             self.screen.render().unwrap();
             if action == Action::Exit {
+                self.screen.disable_raw_mode().unwrap();
                 break;
             }
         }
-
-        self.screen.disable_raw_mode().unwrap();
-    }
-
-    fn init(&mut self) {
-        // self.screen.enable_raw_mode().unwrap();
-        // hide cursor
-        // enable raw mode
     }
 }

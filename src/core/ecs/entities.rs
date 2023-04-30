@@ -1,5 +1,5 @@
 #[derive(Debug)]
-struct Entity {
+pub struct Entity {
     alive: bool,
 }
 
@@ -21,9 +21,9 @@ impl Entity {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Entities {
-    entities: Vec<Entity>,
+    pub entities: Vec<Entity>,
     available: Vec<usize>,
 }
 
@@ -49,7 +49,7 @@ impl Entities {
     }
 
     pub fn create(&mut self) -> usize {
-        if self.available.len() > 0 {
+        if !self.available.is_empty() {
             let index = self.available.remove(0);
             self.entities[index].resurrect();
             return index;
