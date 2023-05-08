@@ -1,4 +1,6 @@
-use std::{thread, time::Duration};
+use std::{borrow::BorrowMut, thread, time::Duration};
+
+use rand::Rng;
 
 use super::{
     ecs::{
@@ -46,6 +48,18 @@ struct Arena {
     height: i16,
 }
 
+#[derive(Default)]
+struct Debugging {
+    pub name: Option<String>,
+    pub x: Option<i16>,
+    pub y: Option<i16>,
+    pub is_alive: Option<bool>,
+    pub collided: Option<bool>,
+    sprite: Option<char>,
+    width: Option<i16>,
+    height: Option<i16>,
+}
+
 impl Component for Position {}
 impl Component for Velocity {}
 impl Component for Render {}
@@ -53,12 +67,15 @@ impl Component for Collidable {}
 impl Component for Arena {}
 impl Component for Snek {}
 impl Component for Apple {}
+impl Component for Debugging {}
 
 struct MoveSystem;
 struct CollisionCheckSystem;
 struct WrappingBoundrySystem;
 struct VelocitySystem;
 struct DeathSystem;
+struct AppleSpawningSystem;
+struct DebugSystem;
 
 impl System for WrappingBoundrySystem {
     fn update(&mut self, em: &mut EntityManager, eia: &mut EntityIdAccessor, _action: &Action) {
@@ -93,7 +110,7 @@ impl System for CollisionCheckSystem {
         for id in apple_ids.iter() {
             if CollisionCheckSystem::check_collision(self, em, user_id, *id) {
                 let (c, _) = em
-                    .borrow_component_manager_pair_mut::<Collidable, Apple>(*id)
+                    .borrow_component_pair_mut::<Collidable, Apple>(*id)
                     .unwrap();
                 c.collided = true;
             }
@@ -119,7 +136,7 @@ impl System for MoveSystem {
         let entity_ids = eia.borrow_ids_for_pair::<Velocity, Position>(em).unwrap();
         for id in entity_ids.iter() {
             let (velocity, mut position) = em
-                .borrow_component_manager_pair_mut::<Velocity, Position>(*id)
+                .borrow_component_pair_mut::<Velocity, Position>(*id)
                 .unwrap();
             position.x += velocity.x;
             position.y += velocity.y;
@@ -131,7 +148,7 @@ impl System for VelocitySystem {
     fn update(&mut self, em: &mut EntityManager, eia: &mut EntityIdAccessor, action: &Action) {
         let id = eia.borrow_ids_for_pair::<Velocity, Position>(em).unwrap()[0];
         let (velocity, _) = em
-            .borrow_component_manager_pair_mut::<Velocity, Position>(id)
+            .borrow_component_pair_mut::<Velocity, Position>(id)
             .unwrap();
         match action {
             Action::Up => {
@@ -161,10 +178,44 @@ impl System for DeathSystem {
         for id in ids.iter() {
             let component = em.borrow_component::<Collidable>(*id).unwrap();
             if component.collided {
-                let apple = em.borrow_component_mut::<Apple>(*id).unwrap();
+                let (apple, collidable) = em
+                    .borrow_component_pair_mut::<Apple, Collidable>(*id)
+                    .unwrap();
+                collidable.collided = false;
                 apple.is_alive = false;
-                em.remove_entity(*id);
             }
+        }
+    }
+}
+
+impl System for AppleSpawningSystem {
+    fn update(&mut self, em: &mut EntityManager, eia: &mut EntityIdAccessor, action: &Action) {
+        let apple_id = eia.borrow_ids::<Apple>(em).unwrap()[0];
+        let arena_id = eia.borrow_ids::<Arena>(em).unwrap()[0];
+        let arena = em.borrow_component::<Arena>(arena_id).unwrap();
+        let (apple, position) = em
+            .borrow_component_pair_mut::<Apple, Position>(apple_id)
+            .unwrap();
+        if !apple.is_alive {
+            apple.is_alive = true;
+            let mut rng = rand::thread_rng();
+            position.x = rng.gen_range(1..arena.width - 1);
+            position.y = rng.gen_range(1..arena.height - 1);
+        }
+    }
+}
+
+impl System for DebugSystem {
+    fn update(&mut self, em: &mut EntityManager, eia: &mut EntityIdAccessor, _action: &Action) {
+        let snek_id = eia.borrow_ids::<Snek>(em).unwrap()[0];
+        let (position, snek, debug) = em
+            .borrow_component_triple_mut::<Position, Snek, Debugging>(snek_id)
+            .unwrap();
+        {
+            debug.x = Some(position.x);
+            debug.y = Some(position.y);
+            debug.name = Some("Snek".to_string());
+            debug.is_alive = Some(snek.is_alive);
         }
     }
 }
@@ -179,6 +230,7 @@ impl Game {
         simulation.register_component::<Arena>();
         simulation.register_component::<Snek>();
         simulation.register_component::<Apple>();
+        simulation.register_component::<Debugging>();
 
         let entity_id = simulation.create_entity();
         simulation.add_component_to_entity(entity_id, Snek { is_alive: true });
@@ -186,6 +238,7 @@ impl Game {
         simulation.add_component_to_entity(entity_id, Velocity { x: 1, y: 0 });
         simulation.add_component_to_entity(entity_id, Render { sprite: '🟢' });
         simulation.add_component_to_entity(entity_id, Collidable { collided: false });
+        simulation.add_component_to_entity(entity_id, Debugging::default());
 
         let entity_id = simulation.create_entity();
         simulation.add_component_to_entity(entity_id, Apple { is_alive: true });
@@ -218,6 +271,8 @@ impl Game {
         simulation.add_system(CollisionCheckSystem {});
         simulation.add_system(WrappingBoundrySystem {});
         simulation.add_system(DeathSystem {});
+        simulation.add_system(AppleSpawningSystem {});
+        simulation.add_system(DebugSystem {});
 
         let window = Window::new(Pos::new(10, 1), Size::new(140, 40));
 
@@ -249,6 +304,7 @@ impl Game {
             for id in entity_ids.iter() {
                 let render = em.borrow_component::<Render>(*id).unwrap();
                 let position = em.borrow_component::<Position>(*id).unwrap();
+                let debug = em.borrow_component::<Debugging>(*id);
 
                 self.window.put(
                     &mut self.screen,
@@ -256,13 +312,22 @@ impl Game {
                     Pos::new(position.x as u16, position.y as u16),
                     Style::white(),
                 );
+
+                if let Some(debug) = debug {
+                    self.window.print(
+                        &mut self.screen,
+                        format!(
+                            "name: {}, position.x: {}, position.y: {}, is_alive: {}",
+                            debug.name.to_owned().unwrap(),
+                            debug.x.unwrap(),
+                            debug.y.unwrap(),
+                            debug.is_alive.unwrap()
+                        ),
+                        &mut Pos::new(0, 23),
+                        Style::white(),
+                    );
+                }
             }
-            self.window.print(
-                &mut self.screen,
-                format!("em: {:?}", em.entities.entities.len()),
-                &mut Pos::new(0, 23),
-                Style::white(),
-            );
             self.screen.render().unwrap();
             if action == Action::Exit {
                 self.screen.disable_raw_mode().unwrap();

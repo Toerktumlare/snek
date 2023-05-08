@@ -92,10 +92,7 @@ impl EntityManager {
         self.frame
     }
 
-    pub(crate) fn borrow_component_manager_pair_mut<
-        T1: 'static + Component,
-        T2: 'static + Component,
-    >(
+    pub(crate) fn borrow_component_pair_mut<T1: 'static + Component, T2: 'static + Component>(
         &self,
         entity_id: usize,
     ) -> Option<(&mut T1, &mut T2)> {
@@ -111,6 +108,32 @@ impl EntityManager {
         let t2 = manager2.borrow_components_mut(entity_id).unwrap();
 
         Some((t1, t2))
+    }
+
+    pub(crate) fn borrow_component_triple_mut<
+        T1: 'static + Component,
+        T2: 'static + Component,
+        T3: 'static + Component,
+    >(
+        &self,
+        entity_id: usize,
+    ) -> Option<(&mut T1, &mut T2, &mut T3)> {
+        let type_id1 = TypeId::of::<T1>();
+        let type_id2 = TypeId::of::<T2>();
+        let type_id3 = TypeId::of::<T3>();
+
+        let manager1: &mut ComponentManager<T1> =
+            cast_manager_mut_unsafe(self.manager_map.get(&type_id1).unwrap());
+        let manager2: &mut ComponentManager<T2> =
+            cast_manager_mut_unsafe(self.manager_map.get(&type_id2).unwrap());
+        let manager3: &mut ComponentManager<T3> =
+            cast_manager_mut_unsafe(self.manager_map.get(&type_id3).unwrap());
+
+        let t1 = manager1.borrow_components_mut(entity_id).unwrap();
+        let t2 = manager2.borrow_components_mut(entity_id).unwrap();
+        let t3 = manager3.borrow_components_mut(entity_id).unwrap();
+
+        Some((t1, t2, t3))
     }
 
     pub(crate) fn step_frame(&mut self) {
