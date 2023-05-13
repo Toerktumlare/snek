@@ -125,19 +125,19 @@ impl<'a> Shape<'a> {
             match direction {
                 Direction::North => {
                     self.window
-                        .put(screen, char, start + Pos::new(0, i as u16), style)
+                        .put_sprite(screen, char, start + Pos::new(0, i as u16), style)
                 }
                 Direction::East => {
                     self.window
-                        .put(screen, char, start + Pos::new(i as u16, 0), style)
+                        .put_sprite(screen, char, start + Pos::new(i as u16, 0), style)
                 }
                 Direction::South => {
                     self.window
-                        .put(screen, char, start + Pos::new(0, i as u16), style)
+                        .put_sprite(screen, char, start + Pos::new(0, i as u16), style)
                 }
                 Direction::West => {
                     self.window
-                        .put(screen, char, start + Pos::new(i as u16, 0), style)
+                        .put_sprite(screen, char, start + Pos::new(i as u16, 0), style)
                 }
             }
         }

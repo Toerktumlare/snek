@@ -12,5 +12,6 @@ fn main() {
     let screen = core::gui::screen::Screen::stdout()
         .unwrap()
         .alternate_screen(false);
+    screen.enable_raw_mode().unwrap();
     Game::new(screen, height.parse().unwrap(), width.parse().unwrap()).run();
 }
