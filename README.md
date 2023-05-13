@@ -1,5 +1,5 @@
 # snek
-A Snek implementation in Rusterino
+A enterprise Snek implementation in Rusterino using a ecs system. Game is very buggy, you have been warned.
 
 ## Todo:
 - [x] clear screen
@@ -9,16 +9,14 @@ A Snek implementation in Rusterino
 - [x] handle inputs
 - [x] exit game
 - [x] use alternative terminal screen
-- [x] add an `GameObject` trait
 - [ ] add a snake tail
-- [ ] add an apple
+- [x] add an apple
 - [ ] grow tail when eating apple
 - [ ] restart game if touching your own tail
-- [ ] random x, y of apple and snake starting point
-- [x] add a screen type
+- [x] random x, y of apple and snake starting point
 - [ ] add debug flag
 - [ ] add some instructions on screen
-- [ ] bugfix: not allowed to do full 180 degree turns
+- [x] bugfix: not allowed to do full 180 degree turns
 - [ ] bugfix: can travel in walls
-- [ ] bugfix: debug info shows wrong events
+- [x] bugfix: debug info shows wrong events
 - [ ] bugfix: off by one collisions bottom
